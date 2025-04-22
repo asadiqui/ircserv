@@ -4,6 +4,8 @@
 #include <string>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <map>
+#include <poll.h>
 
 class Client; // Forward declaration
 
@@ -14,14 +16,15 @@ private:
     std::string password;
     int socketFd;
     struct sockaddr_in sockAddr;
-    Client* currentClient;
+    std::map<int, Client*> clients; // for client socket management
+
 public:
     ServerSocket(int port, std::string password);
     ~ServerSocket();
-    void run();
+    void newClient(struct pollfd* fds, int max_fds);
     void sender(int fd, const std::string& msg);
-    int getSocketFd() const
-    {
+    int getSocketFd() const 
+    { 
         return socketFd;
     }
 };

@@ -1,24 +1,29 @@
 #include "ServerSocket.hpp"
+#include "PollHandler.hpp"
 #include <iostream>
 #include <cstdlib>
 #include <csignal>
-#include <stdexcept>
 
+void signalHandler(int code) 
+{
+    std::cout << "Signal " << code << " caught!" << std::endl;
+    exit(0);
+}
 
 int main(int argc, char** argv)
 {
-    int port;
     if (argc != 3)
     {
-        std::cout << "./ircserv <port> <password>" << std::endl;
+        std::cout << "Usage: ./ircserv <port> <password>" << std::endl;
         return 1;
     }
+    int port;
     try 
     {
         port = std::atoi(argv[1]);
-        if (port < 1024 || port > 65535) 
+        if (port < 0 || port > 65535) 
         {
-            std::cout << "Port must be between 1024 and 65535!" << std::endl;
+            std::cout << "Port must be between 0 and 65535!" << std::endl;
             return 1;
         }
         for (int i = 0; argv[1][i]; i++)
@@ -36,15 +41,16 @@ int main(int argc, char** argv)
         return 1;
     }
     std::string password = argv[2];
+    signal(SIGINT, signalHandler);
     try 
     {
-        std::cout << "Starting IRC server on port " << port << "..." << std::endl;
         ServerSocket server(port, password);
-        server.run();
+        PollHandler poller(server);
+        poller.run(); // Runs indefinitely
     } 
     catch (const std::exception& e) 
     {
-        std::cerr << "Error: " << e.what() << std::endl; 
+        std::cerr << "Error: " << e.what() << std::endl;
         return 1;
     }
     return 0;

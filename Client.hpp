@@ -13,7 +13,6 @@ public:
     int getFd() const
     { 
         return fd; 
-
     }
     ~Client() 
     {

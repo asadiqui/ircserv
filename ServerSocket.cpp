@@ -3,74 +3,96 @@
 #include <iostream>
 #include <fcntl.h>
 #include <unistd.h>
-#include <cstring>
+#include <cstring> // For strerror
 #include "Client.hpp"
 #include <cerrno>
+#include <netdb.h> // For getaddrinfo()
+#include <cstdio>
 
-ServerSocket::ServerSocket(int port, std::string password) : port(port), password(password), socketFd(-1) 
+ServerSocket::ServerSocket(int port, std::string password) : port(port), password(password), socketFd(-1)
 {
-    sockAddr.sin_family = AF_INET;
-    sockAddr.sin_port = htons(port);
-    sockAddr.sin_addr.s_addr = INADDR_ANY;
+    struct addrinfo hints, *serverInfo;
 
-    socketFd = socket(sockAddr.sin_family, SOCK_STREAM, 0);
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_PASSIVE;
+
+    char portStr[10];
+    sprintf(portStr, "%d", port);
+    int status = getaddrinfo(NULL, portStr, &hints, &serverInfo);
+    if (status != 0)
+    {
+        std::string errorMsg = "getaddrinfo error: ";
+        errorMsg += gai_strerror(status);
+        throw std::runtime_error(errorMsg);
+    }
+    socketFd = socket(serverInfo->ai_family, serverInfo->ai_socktype, serverInfo->ai_protocol);
     if (socketFd == -1)
-        throw std::runtime_error("Server socket could not initialized!");
-    if (bind(socketFd, (struct sockaddr*)&sockAddr, sizeof(sockAddr)) == -1)
-        throw std::runtime_error("Server socket could not binded!");
+        throw std::runtime_error("Server socket could not be initialized!");   
+    int yes = 1;
+    if (setsockopt(socketFd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1)
+        throw std::runtime_error("Failed to set socket options!");
+    if (bind(socketFd, serverInfo->ai_addr, serverInfo->ai_addrlen) == -1)
+        throw std::runtime_error("Server socket could not be bound!");
     if (listen(socketFd, 10) == -1)
         throw std::runtime_error("Server socket could not be listened!");
+    freeaddrinfo(serverInfo);
     std::cout << "Server socket initialized on port " << port << std::endl;
+}
+
+void ServerSocket::newClient(pollfd* fds, int max_fds)
+{
+    struct sockaddr_in newClientAddr;
+    socklen_t addrLen = sizeof(newClientAddr);
+    int newClient = accept(socketFd, reinterpret_cast<sockaddr*>(&newClientAddr), &addrLen);
+    if (newClient == -1)
+    {
+        std::cerr << "Accept failed: " << strerror(errno) << std::endl;
+        return;
+    }
+    for (int i = 1; i < max_fds; i++)
+    {
+        if (fds[i].fd == -1)
+        {
+            if (fcntl(newClient, F_SETFL, O_NONBLOCK) == -1)
+            {
+                std::cerr << "fcntl failed for client FD " << newClient << ": " << strerror(errno) << std::endl;
+                close(newClient);
+                return;
+            }
+            fds[i].fd = newClient;
+            fds[i].events = POLLIN; // Add POLLOUT to events
+            clients[newClient] = new Client(newClient);
+            sender(newClient, "SERVER You must authenticate!\r\n");
+            sender(newClient, "SERVER For help use HELP command!\r\n");
+            std::cout << "New client connected: FD " << newClient << std::endl;
+            break;
+        }
+    }
+    if (clients.size() >= static_cast<size_t>(max_fds - 1))
+    {
+        std::cerr << "No free slots for client FD " << newClient << std::endl;
+        send(newClient, "SERVER :Connection limit reached\r\n", 34, 0);
+        close(newClient);
+    }
 }
 
 void ServerSocket::sender(int fd, const std::string& msg)
 {
-    std::cout << "Send ----> Fd[" << fd << "]: " << msg;
+    std::cout << "Send ----> Fd[" << fd << "]: " << msg << std::endl;
     if (send(fd, msg.c_str(), msg.size(), 0) == -1)
     {
         std::cerr << "Send failed for FD " << fd << ": " << strerror(errno) << std::endl;
     }
 }
 
-void ServerSocket::run()
-{
-    struct sockaddr_in clientAddr;
-    socklen_t addrLen = sizeof(clientAddr);
-
-    // Accept one client
-    std::cout << "Server running, waiting for a connection..." << std::endl;
-    int clientFd = accept(socketFd, reinterpret_cast<sockaddr*>(&clientAddr), &addrLen);
-    if (clientFd == -1)
-    {
-        std::cerr << "Accept failed: " << strerror(errno) << std::endl;
-        return;
-    }
-    std::cout << "Client connected: FD " << clientFd << std::endl;
-    currentClient = new Client(clientFd);
-    std::string welcome_msg = "Welcome to our IRC server\r\n";
-    sender(clientFd, welcome_msg);
-    // Receive message from the client
-    char buffer[1024];
-    memset(buffer, 0, sizeof(buffer));
-    int bytes_received = recv(clientFd, buffer, sizeof(buffer) - 1, 0);
-    if (bytes_received <= 0) 
-    {
-        std::cerr << "Failed to receive message from client or client disconnected" << std::endl;
-    }
-    else
-    {
-        std::string message(buffer);
-        std::cout << "Message with length " << bytes_received << " was received from client: " << message << std::endl;
-    }
-    close(clientFd);
-    std::cout << "Client connection closed, server shutting down..." << std::endl;
-}
-
 ServerSocket::~ServerSocket()
 {
-    if (currentClient)
+    for (std::map<int, Client*>::iterator it = clients.begin(); it != clients.end(); ++it)
     {
-        close(currentClient->getFd());
+        close(it->first);
+        delete it->second;
     }
     close(socketFd);
     std::cout << "Server socket closed" << std::endl;

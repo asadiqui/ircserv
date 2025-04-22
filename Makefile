@@ -1,6 +1,6 @@
 NAME = server
 
-SRC = main.cpp ServerSocket.cpp
+SRC = main.cpp PollHandler.cpp ServerSocket.cpp
 
 FLAGS = -Wall -Wextra -Werror
 
@@ -12,6 +12,9 @@ all: $(NAME)
 
 $(NAME): $(OBJECT)
 	c++ $(OBJECT) -o $(NAME)
+
+%.o:%.cpp
+	c++ $(CPP_STANDARD) -c $<
 
 clean:
 	rm -f $(OBJECT)
