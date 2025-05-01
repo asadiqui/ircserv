@@ -1,31 +1,35 @@
 #ifndef SERVERSOCKET_HPP
 #define SERVERSOCKET_HPP
 
-#include <string>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <string>
 #include <map>
-#include <poll.h>
+#include "Client.hpp"
 
-class Client; // Forward declaration
-
-class ServerSocket 
+class ServerSocket
 {
 private:
     int port;
     std::string password;
     int socketFd;
-    struct sockaddr_in sockAddr;
-    std::map<int, Client*> clients; // for client socket management
-
+    std::map<int, Client*> clients;
 public:
     ServerSocket(int port, std::string password);
     ~ServerSocket();
-    void newClient(struct pollfd* fds, int max_fds);
+    int getSocketFd() 
+    {
+        return socketFd; 
+    }
+    std::string getPassword() const
+    {
+        return password;
+    }
+    void newClient(int epoll_fd);
     void sender(int fd, const std::string& msg);
-    int getSocketFd() const 
-    { 
-        return socketFd;
+    std::map<int, Client*>& getClients()
+    {
+        return clients;
     }
 };
 

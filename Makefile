@@ -2,7 +2,7 @@ NAME = server
 
 SRC = main.cpp PollHandler.cpp ServerSocket.cpp
 
-FLAGS = -Wall -Wextra -Werror
+FLAGS = -Wall -Wextra -Werror #-fsanitize=address
 
 CPP_STANDARD = -std=c++98
 
@@ -11,10 +11,10 @@ OBJECT = $(SRC:%.cpp=%.o)
 all: $(NAME)
 
 $(NAME): $(OBJECT)
-	c++ $(OBJECT) -o $(NAME)
+	c++ $(OBJECT) $(FLAGS) -o $(NAME)
 
 %.o:%.cpp
-	c++ $(CPP_STANDARD) -c $<
+	c++ $(CPP_STANDARD) $(FLAGS) -c $<
 
 clean:
 	rm -f $(OBJECT)
