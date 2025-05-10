@@ -6,30 +6,33 @@
 #include <string>
 #include <map>
 #include "Client.hpp"
+#include "ClientManager.hpp"
 
-class ServerSocket
+class PollHandler;
+
+class ServerSocket 
 {
 private:
     int port;
     std::string password;
     int socketFd;
-    std::map<int, Client*> clients;
+    ClientManager clientManager;
 public:
     ServerSocket(int port, std::string password);
     ~ServerSocket();
     int getSocketFd() 
-    {
+    { 
         return socketFd; 
     }
     std::string getPassword() const
-    {
-        return password;
+    { 
+        return password; 
     }
-    void newClient(int epoll_fd);
-    void sender(int fd, const std::string& msg);
+    void newClient(PollHandler& poller);
+    bool sendMessage(int fd, const std::string& msg);
     std::map<int, Client*>& getClients()
     {
-        return clients;
+        return clientManager.getClients();
     }
 };
 

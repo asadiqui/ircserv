@@ -1,13 +1,13 @@
 #ifndef POLLHANDLER_HPP
 #define POLLHANDLER_HPP
 
-#include <poll.h>
 #include <map>
 #include <string>
-#include "ServerSocket.hpp"
 #include <vector>
+#include <sys/epoll.h>
+#include "ServerSocket.hpp"
 
-class PollHandler
+class PollHandler 
 {
 private:
     ServerSocket& server;
@@ -17,6 +17,9 @@ public:
     PollHandler(ServerSocket& server);
     ~PollHandler();
     void run();
+    void processClientMessage(int fd);
+    void closeClient(int fd);
+    void addClientToEpoll(int fd);
 };
 
 #endif
