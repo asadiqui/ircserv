@@ -20,7 +20,9 @@ bool Utils::isValidNickname(const std::string& nick)
     {
         char c = nick[i];
         if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
-              (c >= '0' && c <= '9') || c == '-' || c == '_')) 
+              (c >= '0' && c <= '9') || c == '-' || c == '_' ||
+              c == '{' || c == '}' || c == '|' || c == '\\' || c == '^' ||
+              c == '[' || c == ']')) 
         {
             return false;
         }

@@ -13,6 +13,7 @@ private:
     static void handlePass(const std::string& msg, Client* client, ServerSocket& server, int epoll_fd);
     static void handleNick(const std::string& msg, Client* client, ServerSocket& server);
     static void handleUser(const std::string& msg, Client* client, ServerSocket& server);
+    static void sendWelcome(Client* client, ServerSocket& server);
 };
 
 #endif
