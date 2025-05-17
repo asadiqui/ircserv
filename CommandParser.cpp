@@ -34,7 +34,16 @@ void CommandParser::handlePass(const std::string& msg, Client* client, ServerSoc
 {
     std::string pass = Utils::trim(msg.substr(5));
     int fd = client->getFd();
-    std::string nickname = client->getNickname().empty() ? "*" : client->getNickname();
+    std::string nickname;
+
+    if (client->getNickname().empty())
+    {
+        nickname = "*";
+    }
+    else
+    {
+        nickname = client->getNickname();
+    }
     if (pass.empty())
     {
         server.sendMessage(fd, ":server 464 " + nickname + " :Password incorrect\r\n");
@@ -57,7 +66,16 @@ void CommandParser::handleNick(const std::string& msg, Client* client, ServerSoc
 {
     std::string nick = Utils::trim(msg.substr(5));
     int fd = client->getFd();
-    std::string nickname = client->getNickname().empty() ? "*" : client->getNickname();
+    std::string nickname;
+
+    if (client->getNickname().empty())
+    {
+        nickname = "*";
+    }
+    else
+    {
+        nickname = client->getNickname();
+    }
     if (!client->getIsAuthenticated())
     {
         server.sendMessage(fd, ":server 451 " + nickname + " :You have not registered\r\n");

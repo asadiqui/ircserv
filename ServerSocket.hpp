@@ -28,6 +28,10 @@ public:
     { 
         return password; 
     }
+    int getPort() const
+    {
+        return port;
+    }
     void newClient(PollHandler& poller);
     bool sendMessage(int fd, const std::string& msg);
     std::map<int, Client*>& getClients()

@@ -39,7 +39,8 @@ ServerSocket::ServerSocket(int port, std::string password) : port(port), passwor
         freeaddrinfo(serverInfo);
         throw std::runtime_error("Failed to set socket options!");
     }
-    if (bind(socketFd, serverInfo->ai_addr, serverInfo->ai_addrlen) == -1) {
+    if (bind(socketFd, serverInfo->ai_addr, serverInfo->ai_addrlen) == -1)
+    {
         freeaddrinfo(serverInfo);
         throw std::runtime_error("Server socket could not be bound!");
     }
@@ -49,7 +50,7 @@ ServerSocket::ServerSocket(int port, std::string password) : port(port), passwor
         throw std::runtime_error("Server socket could not be listened!");
     }
     freeaddrinfo(serverInfo);
-    Logger::info("Server socket initialized on port " + Utils::intToString(port));
+    Logger::info("Server socket initialized on port " + Utils::intToString(getPort()));
 }
 
 void ServerSocket::newClient(PollHandler& poller)
