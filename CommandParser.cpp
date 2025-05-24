@@ -2,6 +2,8 @@
 #include "CommandParser.hpp"
 #include "Utils.hpp"
 #include <unistd.h>
+#include <iostream>
+
 
 void CommandParser::parseCommand(const std::string& msg, Client* client, ServerSocket& server, int epoll_fd)
 {
@@ -51,6 +53,7 @@ void CommandParser::handlePass(const std::string& msg, Client* client, ServerSoc
     }
     if (pass == server.getPassword())
     {
+        server.sendMessage(fd, ":Server 001 :Authentication successful\r\n");
         client->setAuthenticated(true);
     }
     else
@@ -120,30 +123,42 @@ void CommandParser::handleUser(const std::string& msg, Client* client, ServerSoc
         server.sendMessage(fd, ":server 451 " + nickname + " :You have not registered\r\n");
         return;
     }
-    if (client->getIsAuthenticated() && !client->getNickname().empty() && !client->getUsername().empty())
+    if (!client->getUsername().empty())
     {
         server.sendMessage(fd, ":server 462 " + nickname + " :You may not reregister\r\n");
         return;
     }
-    std::string params = msg.substr(5);
-    std::vector<std::string> tokens = Utils::split(params, ' ');
-    if (tokens.size() < 4)
+    std::string params = Utils::trim(msg.substr(5));
+    if (params.empty())
     {
-        server.sendMessage(fd, ":server 461 " + nickname + " :Need more parameters\r\n");
+        server.sendMessage(fd, ":server 461 " + nickname + " USER :Not enough parameters\r\n");
         return;
     }
-    std::string username = tokens[0];
-    std::string hostname = tokens[1];
-    std::string servername = tokens[2];
-    std::string realname = tokens[3];
-    if (hostname.empty() || servername.empty() || hostname.find(' ') != std::string::npos)
+    size_t realname_pos = params.find(" :");
+    if (realname_pos == std::string::npos)
     {
-        server.sendMessage(fd, ":server 461 " + nickname + " :Need more parameters\r\n");
+        server.sendMessage(fd, ":server 461 " + nickname + " USER :Not enough parameters\r\n");
         return;
     }
-    if (username.empty() || realname.empty())
+    std::string first_part = params.substr(0, realname_pos);
+    std::string realname = params.substr(realname_pos + 2);
+    std::vector<std::string> tokens = Utils::split(first_part, ' ');
+    if (tokens.size() < 3)
     {
-        server.sendMessage(fd, ":server 461 " + nickname + " :Need more parameters\r\n");
+        server.sendMessage(fd, ":server 461 " + nickname + " USER :Not enough parameters\r\n");
+        return;
+    }
+    std::string username = Utils::trim(tokens[0]);
+    std::string hostname = Utils::trim(tokens[1]); 
+    std::string servername = Utils::trim(tokens[2]);
+    if (username.empty() || username.length() > 10 || !Utils::isValidUsername(username))
+    {
+        server.sendMessage(fd, ":server 461 " + nickname + " USER :Invalid username\r\n");
+        return;
+    }
+    if (realname.empty() || realname.length() > 50)
+    {
+        server.sendMessage(fd, ":server 461 " + nickname + " USER :Invalid realname\r\n");
         return;
     }
     client->setUsername(username);
