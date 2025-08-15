@@ -68,6 +68,9 @@ void PollHandler::processClientMessage(int fd)
 
 void PollHandler::closeClient(int fd)
 {
+    // Remove client from all channels before closing
+    server.getChannelManager().removeClientFromAllChannels(fd);
+    
     server.sendMessage(fd, ":Server QUIT :Connection closed\r\n");
     close(fd);
     server.getClients().erase(fd);

@@ -69,3 +69,16 @@ std::string Utils::intToString(int value)
     ss << value;
     return ss.str();
 }
+
+std::string Utils::normalizeChannelName(const std::string& channelName)
+{
+    std::string normalized = channelName;
+    for (size_t i = 0; i < normalized.length(); ++i)
+    {
+        if (normalized[i] >= 'A' && normalized[i] <= 'Z')
+        {
+            normalized[i] = normalized[i] + ('a' - 'A');
+        }
+    }
+    return normalized;
+}
