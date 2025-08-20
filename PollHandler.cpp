@@ -22,7 +22,7 @@ PollHandler::PollHandler(ServerSocket& server) : server(server)
     struct epoll_event ev;
     ev.events = EPOLLIN | EPOLLET;
     ev.data.fd = server.getSocketFd();
-    if ((epoll_fd == -1) || (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server.getSocketFd(), &ev) == -1))
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server.getSocketFd(), &ev) == -1)
     {
         close(epoll_fd);
         throw std::runtime_error("epoll_ctl failed for server socket: " + std::string(strerror(errno)));
@@ -60,7 +60,7 @@ void PollHandler::processClientMessage(int fd, Bot& bot)
             std::map<int, Client*>::iterator it = server.getClients().find(fd);
             if (it != server.getClients().end())
             {
-                CommandParser::parseCommand(msg, it->second, server, epoll_fd, bot);
+                CommandParser::parseCommand(msg, it->second, server, epoll_fd , bot);
             }
         }
     }
@@ -68,6 +68,9 @@ void PollHandler::processClientMessage(int fd, Bot& bot)
 
 void PollHandler::closeClient(int fd)
 {
+    // Remove client from all channels before closing
+    server.getChannelManager().removeClientFromAllChannels(fd);
+    
     server.sendMessage(fd, ":Server QUIT :Connection closed\r\n");
     close(fd);
     server.getClients().erase(fd);
@@ -88,7 +91,7 @@ void PollHandler::addClientToEpoll(int fd)
     }
 }
 
-void PollHandler::run(Bot& bot)
+void PollHandler::run(Bot& bot) 
 {
     std::vector<epoll_event> events(Config::MAX_EVENTS);
     while (true) 

@@ -7,6 +7,7 @@
 #include <map>
 #include "Client.hpp"
 #include "ClientManager.hpp"
+#include "ChannelManager.hpp"
 
 class PollHandler;
 
@@ -17,6 +18,7 @@ private:
     std::string password;
     int socketFd;
     ClientManager clientManager;
+    ChannelManager channelManager;
 public:
     ServerSocket(int port, std::string password);
     ~ServerSocket();
@@ -37,6 +39,14 @@ public:
     std::map<int, Client*>& getClients()
     {
         return clientManager.getClients();
+    }
+    ClientManager& getClientManager()
+    {
+        return clientManager;
+    }
+    ChannelManager& getChannelManager()
+    {
+        return channelManager;
     }
 };
 

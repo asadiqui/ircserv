@@ -9,8 +9,6 @@
 #include <netdb.h>
 #include <sys/epoll.h>
 #include <cerrno>
-#include "bot.hpp"
-#include <iostream>
 
 ServerSocket::ServerSocket(int port, std::string password) : port(port), password(password), socketFd(-1)
 {
@@ -53,8 +51,6 @@ ServerSocket::ServerSocket(int port, std::string password) : port(port), passwor
     }
     freeaddrinfo(serverInfo);
     Logger::info("Server socket initialized on port " + Utils::intToString(getPort()));
-   
-    
 }
 
 void ServerSocket::newClient(PollHandler& poller)
@@ -102,4 +98,3 @@ ServerSocket::~ServerSocket()
     close(socketFd);
     Logger::info("Server socket closed");
 }
-

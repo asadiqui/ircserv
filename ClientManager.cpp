@@ -29,6 +29,13 @@ std::map<int, Client*>& ClientManager::getClients()
 {
     return clients;
 }
-
-// receiveMessage
-
+Client* ClientManager::getClientByNickname(const std::string& nickname) {
+    std::map<int, Client*>::iterator it;
+    for (it = clients.begin(); it != clients.end(); ++it) {
+        Client* client = it->second;
+        if (client && client->getNickname() == nickname) {
+            return client; // found
+        }
+    }
+    return NULL; // not found
+}

@@ -13,7 +13,7 @@ public:
     void removeClient(int fd);
     Client* getClient(int fd);
     std::map<int, Client*>& getClients();
-
+    Client* getClientByNickname(const std::string& nickname); 
 };
 
 #endif

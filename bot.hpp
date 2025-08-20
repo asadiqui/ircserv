@@ -5,8 +5,8 @@
 /*                                                    +:+ +:+         +:+     */
 /*   By: mnachit <mnachit@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2025/07/19 21:16:56 by mnachit           #+#    #+#             */
-/*   Updated: 2025/07/19 22:19:08 by mnachit          ###   ########.fr       */
+/*   Created: 2025/08/15 16:12:26 by mnachit           #+#    #+#             */
+/*   Updated: 2025/08/15 16:20:11 by mnachit          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -34,20 +34,5 @@ class Bot {
         std::string getNickname() const { return nickname; }
         ~Bot();
     };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 #endif

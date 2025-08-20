@@ -1,7 +1,7 @@
 NAME = server
 
-SRC = main.cpp PollHandler.cpp ServerSocket.cpp CommandParser.cpp Utils.cpp Logger.cpp ClientManager.cpp bot.cpp
-       
+SRC = main.cpp PollHandler.cpp ServerSocket.cpp CommandParser.cpp Utils.cpp Logger.cpp ClientManager.cpp IRCMessage.cpp Channel.cpp ChannelManager.cpp bot.cpp
+
 FLAGS = -Wall -Wextra -Werror #-fsanitize=address
 
 CPP_STANDARD = -std=c++98

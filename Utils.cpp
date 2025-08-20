@@ -30,6 +30,25 @@ bool Utils::isValidNickname(const std::string& nick)
     return true;
 }
 
+bool Utils::isValidUsername(const std::string& username)
+{
+    if (username.empty() || username.length() > 10)
+        return false;
+    if (!(username[0] >= 'A' && username[0] <= 'Z') && 
+        !(username[0] >= 'a' && username[0] <= 'z'))
+        return false;
+    for (size_t i = 0; i < username.length(); ++i)
+    {
+        char c = username[i];
+        if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+              (c >= '0' && c <= '9') || c == '-' || c == '_'))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 std::vector<std::string> Utils::split(const std::string& str, char delimiter)
 {
     std::vector<std::string> tokens;
@@ -49,4 +68,17 @@ std::string Utils::intToString(int value)
     std::stringstream ss;
     ss << value;
     return ss.str();
+}
+
+std::string Utils::normalizeChannelName(const std::string& channelName)
+{
+    std::string normalized = channelName;
+    for (size_t i = 0; i < normalized.length(); ++i)
+    {
+        if (normalized[i] >= 'A' && normalized[i] <= 'Z')
+        {
+            normalized[i] = normalized[i] + ('a' - 'A');
+        }
+    }
+    return normalized;
 }
