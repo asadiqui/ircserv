@@ -334,7 +334,7 @@ void CommandParser::handlePrivmsg(const IRCMessage& msg, Client* client, ServerS
         }
         else if (msg.trailing == "VERSION")
         {
-            std::string versionMessage = ":server PRIVMSG " + client->getNickname() + " :IRC Bot Version 1.0\r\n";
+            std::string versionMessage = ":server PRIVMSG " + client->getNickname() + " :IRC Bot Version 1.3\r\n";
             server.sendMessage(client->getFd(), versionMessage);
         }
         else if (msg.trailing == "PING")
@@ -428,29 +428,33 @@ void CommandParser::handleMode(const IRCMessage& msg, Client* client, ServerSock
     if (msg.params[1] == "+i")
     {
         channel->setInviteOnly(1);
-        server.sendMessage(client->getFd(),
-            ":" + client->getNickname() + "!" + client->getUsername() + "@localhost "
-            "MODE " + channelName + " +i\r\n");
+        std::string broadcast = ":" + client->getNickname() + "!" + client->getUsername() + "@localhost "
+            "MODE " + channelName + " +i\r\n";
+        broadcastToChannel(channelName, broadcast, server);
     }
     else if (msg.params[1] == "-i")
     {
         channel->setInviteOnly(0);
-        server.sendMessage(client->getFd(),
-            ":" + client->getNickname() + "!" + client->getUsername() + "@localhost "
-            "MODE " + channelName + " -i\r\n");
+        std::string broadcast = ":" + client->getNickname() + "!" + client->getUsername() + "@localhost "
+            "MODE " + channelName + " -i\r\n";
+        broadcastToChannel(channelName, broadcast, server);
     }
     else if (msg.params[1] == "+o")
     {
+        client = server.getClientManager().getClientByNickname(msg.params[2]);
         if(!channel->isOperator(client->getFd()))
             channel->addOperator(client->getFd());
-        server.sendMessage(client->getFd(),
-            ":" + client->getNickname() + "!" + client->getUsername() + "@localhost "
-            "MODE " + channelName + " +o\r\n");
+        std::string broadcast = ":" + client->getNickname() + "!" + client->getUsername() + "@localhost "
+                                "MODE " + channelName + " +o " + msg.params[2] + "\r\n";
+        broadcastToChannel(channelName, broadcast, server);
     }
     else if (msg.params[1] == "-o")
     {
         if (channel->isOperator(client->getFd()))
             channel->removeOperator(client->getFd());
+        std::string broadcast = ":" + client->getNickname() + "!" + client->getUsername() + "@localhost "
+                                "MODE " + channelName + " -o " + msg.params[2] + "\r\n";
+        broadcastToChannel(channelName, broadcast, server);
     }
     else if (msg.params[1] == "+l")
     {
@@ -463,17 +467,45 @@ void CommandParser::handleMode(const IRCMessage& msg, Client* client, ServerSock
             return;
         }
         channel->setUserLimit(limit);
+        std::string broadcast = ":" + client->getNickname() + "!" + client->getUsername() + "@localhost "
+                                "MODE " + channelName + " +l " + msg.params[2] + "\r\n";
+        broadcastToChannel(channelName, broadcast, server);
     }
     else if (msg.params[1] == "-l")
+    {
         channel->setUserLimit(0);
+        std::string broadcast = ":" + client->getNickname() + "!" + client->getUsername() + "@localhost "
+                                "MODE " + channelName + " -l\r\n";
+        broadcastToChannel(channelName, broadcast, server);
+    }
     else if (msg.params[1] == "+k")
+    {
         channel->setKey(msg.params[2]);
+        std::string broadcast = ":" + client->getNickname() + "!" + client->getUsername() + "@localhost "
+                                "MODE " + channelName + " +k " + msg.params[2] + "\r\n";
+        broadcastToChannel(channelName, broadcast, server);
+    }
     else if (msg.params[1] == "-k")
+    {
         channel->setKey("");
+        std::string broadcast = ":" + client->getNickname() + "!" + client->getUsername() + "@localhost "
+                                "MODE " + channelName + " -k\r\n";
+        broadcastToChannel(channelName, broadcast, server);
+    }
     else if (msg.params[1] == "+t")
+    {
         channel->setTopicRestricted(1);
+        std::string broadcast = ":" + client->getNickname() + "!" + client->getUsername() + "@localhost "
+                                "MODE " + channelName + " +t\r\n";
+        broadcastToChannel(channelName, broadcast, server);
+    }
     else if (msg.params[1] == "-t")
+    {
         channel->setTopicRestricted(0);
+        std::string broadcast = ":" + client->getNickname() + "!" + client->getUsername() + "@localhost "
+                                "MODE " + channelName + " -t\r\n";
+        broadcastToChannel(channelName, broadcast, server);
+    }
 }
 
 
@@ -551,14 +583,15 @@ void CommandParser::handleKick(const IRCMessage& msg, Client* client, ServerSock
         return; 
     }
     std::string channelName = msg.params[0];
-    if(!isValidChannelName(channelName))
+    Channel* channel = server.getChannelManager().getChannel(channelName);
+    if(!channel)
     {
         server.sendMessage(client->getFd(), ":server 403" + client->getNickname() + " " + 
                         channelName + " :No such channel\r\n");
         return;
     }
-    Channel* channel = server.getChannelManager().getChannel(channelName);
-    if (!channel || !channel->isMember(client->getFd()))
+
+    if (!channel->isMember(client->getFd()))
     {
         server.sendMessage(client->getFd(), ":server 442 " + client->getNickname() + 
                          " " + channelName + " :You're not on that channel\r\n");
@@ -661,6 +694,7 @@ void CommandParser::handleJoin(const IRCMessage& msg, Client* client, ServerSock
     if (!channel)
     {
         channel = server.getChannelManager().createChannel(channelName);
+        channel->addOperator(client->getFd()); // First user is operator
     }
     
     // Check if already in channel
@@ -670,78 +704,43 @@ void CommandParser::handleJoin(const IRCMessage& msg, Client* client, ServerSock
     }
     
 
+    if (channel->isMember(client->getFd()))
+        return;
+
     if (channel->isInviteOnly() && client->getIsinvited() != 1)
     {
-        server.sendMessage(client->getFd(), ":server 473 " + client->getNickname() + 
-                       " " + channelName + " :Cannot join channel (+i)\r\n");
+        server.sendMessage(client->getFd(), ":server 473 " + client->getNickname() +
+                           " " + channelName + " :Cannot join channel (+i)\r\n");
         return;
     }
-    else if (channel->isInviteOnly() && client->getIsinvited() == 1)
+    if (!channel->getKey().empty())
     {
-        client->setIninvited(0);
-        if (!channel->addMember(client->getFd()))
+        if (msg.params.size() < 2 || msg.params[1] != channel->getKey())
         {
-            server.sendMessage(client->getFd(),
-            ":server 471 " + client->getNickname() + " " + channelName + " :Cannot join channel (+l)\r\n");
+            server.sendMessage(client->getFd(), ":server 475 " + client->getNickname() +
+                               " " + channelName + " :Cannot join channel (+k)\r\n");
             return;
         }
-        if (!channel->getKey().empty() && msg.params[2] != channel->getKey())
-        {
-            server.sendMessage(client->getFd(),
-            ":server 471 " + client->getNickname() + " " + channelName + " :Cannot join channel (+k)\r\n");
-            return ;
-        }
-        client->addChannel(channelName);
-        // Send JOIN message to all channel members
-        std::string joinMsg = ":" + client->getNickname() + "!" + client->getUsername() + 
-                            "@localhost JOIN " + channelName + "\r\n";
-        broadcastToChannel(channelName, joinMsg, server);
-        
-        // Send topic if exists
-        if (!channel->getTopic().empty())
-        {
-            server.sendMessage(client->getFd(), ":server 332 " + client->getNickname() + 
-                             " " + channelName + " :" + channel->getTopic() + "\r\n");
-        }
-        
-        // Send names list
-        std::string membersList = channel->getMembersList(server.getClients());
-        server.sendMessage(client->getFd(), ":server 353 " + client->getNickname() + 
-                         " = " + channelName + " :" + membersList + "\r\n");
-        server.sendMessage(client->getFd(), ":server 366 " + client->getNickname() + 
-                         " " + channelName + " :End of /NAMES list\r\n");
     }
     if (!channel->addMember(client->getFd()))
     {
-        server.sendMessage(client->getFd(),
-        ":server 471 " + client->getNickname() + " " + channelName + " :Cannot join channel (+l)\r\n");
-        return ;
+        server.sendMessage(client->getFd(), ":server 471 " + client->getNickname() +
+                           " " + channelName + " :Cannot join channel (+l)\r\n");
+        return;
     }
-    if (!channel->getKey().empty() && msg.params[2] != channel->getKey())
+
+    client->setIninvited(0);
+
+    client->addChannel(channelName);
+
+    std::string joinMsg = ":" + client->getNickname() + "!" + client->getUsername() +
+                          "@localhost JOIN " + channelName + "\r\n";
+    broadcastToChannel(channelName, joinMsg, server);
+
+    if (!channel->getTopic().empty())
     {
-        server.sendMessage(client->getFd(),
-        ":server 471 " + client->getNickname() + " " + channelName + " :Cannot join channel (+k)\r\n");
-        return ;
-    }
-    else
-    {
-        client->addChannel(channelName);
-        // Send JOIN message to all channel members
-        std::string joinMsg = ":" + client->getNickname() + "!" + client->getUsername() + 
-                            "@localhost JOIN " + channelName + "\r\n";
-        broadcastToChannel(channelName, joinMsg, server);
-        
-        // Send topic if exists
-        if (!channel->getTopic().empty())
-        {
-            server.sendMessage(client->getFd(), ":server 332 " + client->getNickname() + 
-                             " " + channelName + " :" + channel->getTopic() + "\r\n");
-        }
-        
-        // Send names list
-        std::string membersList = channel->getMembersList(server.getClients());
-        server.sendMessage(client->getFd(), ":server 353 " + client->getNickname() + 
-                         " = " + channelName + " :" + membersList + "\r\n");
+        server.sendMessage(client->getFd(), ":server 332 " + client->getNickname() +
+                           " " + channelName + " :" + channel->getTopic() + "\r\n");
     }
 }
 
