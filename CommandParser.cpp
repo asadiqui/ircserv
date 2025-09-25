@@ -7,6 +7,12 @@
 #include <sstream>
 
 
+void CommandParser::handlePing(const std::string& msg, Client* client, ServerSocket& server)
+{
+    std::string pingData = msg.substr(5);
+    server.sendMessage(client->getFd(), ":server PONG server :" + pingData + "\r\n");
+}
+
 void CommandParser::parseCommand(const std::string& msg, Client* client, ServerSocket& server, int epoll_fd, Bot& bot)
 {
     // Handle legacy format for authentication commands
@@ -21,6 +27,22 @@ void CommandParser::parseCommand(const std::string& msg, Client* client, ServerS
     else if (msg.find("USER ") == 0)
     {
         handleUser(msg, client, server);
+    }
+     else if (msg.find("CAP") == 0)
+    {
+        return;
+    }
+    else if (msg.find("PING") == 0)
+    {
+        handlePing(msg, client, server);
+    }
+    else if (msg.find("WHO") == 0)
+    {
+        return;
+    }
+    else if (msg.find("WHOIS") == 0)
+    {
+        return;
     }
     else
     {
@@ -73,9 +95,11 @@ void CommandParser::parseCommand(const std::string& msg, Client* client, ServerS
         }
         else
         {
-            // Unknown command
-            server.sendMessage(client->getFd(), ":server 421 " + client->getNickname() + 
-                             " " + ircMsg.command + " :Unknown command\r\n");
+            if (client->getIsAuthenticated() && !client->getNickname().empty())
+            {
+                server.sendMessage(client->getFd(), ":server 421 " + client->getNickname() + 
+                                 " " + ircMsg.command + " :Unknown command\r\n");
+            }
         }
     }
 }

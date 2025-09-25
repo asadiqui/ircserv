@@ -16,7 +16,7 @@ private:
     static void handleNick(const std::string& msg, Client* client, ServerSocket& server);
     static void handleUser(const std::string& msg, Client* client, ServerSocket& server);
     static void sendWelcome(Client* client, ServerSocket& server);
-    
+    static void handlePing(const std::string& msg, Client* client, ServerSocket& server);
     // New IRC commands
     static void handlePrivmsg(const IRCMessage& msg, Client* client, ServerSocket& server, Bot& bot);
     static void handleJoin(const IRCMessage& msg, Client* client, ServerSocket& server);
