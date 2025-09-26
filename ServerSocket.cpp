@@ -10,6 +10,7 @@
 #include <sys/epoll.h>
 #include <cerrno>
 
+
 ServerSocket::ServerSocket(int port, std::string password) : port(port), password(password), socketFd(-1)
 {
     struct addrinfo hints, *serverInfo;
@@ -44,7 +45,7 @@ ServerSocket::ServerSocket(int port, std::string password) : port(port), passwor
         freeaddrinfo(serverInfo);
         throw std::runtime_error("Server socket could not be bound!");
     }
-    if (listen(socketFd, 10) == -1) 
+    if (listen(socketFd, SOMAXCONN) == -1) 
     {
         freeaddrinfo(serverInfo);
         throw std::runtime_error("Server socket could not be listened!");

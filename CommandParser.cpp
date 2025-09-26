@@ -6,11 +6,167 @@
 #include <iostream>
 #include <sstream>
 
-
 void CommandParser::handlePing(const std::string& msg, Client* client, ServerSocket& server)
 {
     std::string pingData = msg.substr(5);
     server.sendMessage(client->getFd(), ":server PONG server :" + pingData + "\r\n");
+}
+
+void CommandParser::handleDccSend(Client* targetClient, std::string target, const std::string& msg, Client* client, ServerSocket& server)
+{
+    std::cout << "[DCC] Processing DCC message: " << msg << std::endl;
+    
+    // parse DCC SEND message: \001DCC SEND filename ip port size\001
+    if (msg.length() < 10 || msg.substr(0, 1) != "\001" || msg.substr(msg.length()-1) != "\001") 
+    {
+        return;
+    }
+    // remove CTCP delimiters
+    std::string dccContent = msg.substr(1, msg.length() - 2);
+    std::istringstream iss(dccContent);
+    std::string dccCmd, sendCmd, filename, ip, port, size;
+    
+    iss >> dccCmd >> sendCmd >> filename >> ip >> port >> size;
+    
+    if (dccCmd != "DCC" || sendCmd != "SEND") 
+    {
+        std::cout << "[DCC] Invalid DCC command format" << std::endl;
+        return;
+    }
+    std::cout << "[DCC] SEND request - File: " << filename 
+              << ", IP: " << ip << ", Port: " << port << ", Size: " << size << std::endl;
+    // forward to target client
+    std::string dccMessage = ":" + client->getNickname() + "!" + client->getUsername() + 
+                            "@localhost PRIVMSG " + target + " :\001DCC SEND " + 
+                            filename + " " + ip + " " + port + " " + size + "\001\r\n";
+    
+    server.sendMessage(targetClient->getFd(), dccMessage);
+    // send confirmation to sender
+    std::string confirm = ":server NOTICE " + client->getNickname() + 
+                         " :DCC SEND request for '" + filename + "' sent to " + target + "\r\n";
+    server.sendMessage(client->getFd(), confirm);
+}
+
+void CommandParser::handleDccAccept(const std::string& msg, Client* client, ServerSocket& server)
+{
+    std::istringstream iss(msg);
+    std::string dcc, accept, filename, port;
+    iss >> dcc >> accept >> filename >> port;
+    
+    if (dcc != "DCC" || accept != "ACCEPT") 
+    {
+        return;
+    }
+    std::cout << "[DCC] ACCEPT received - File: " << filename << ", Port: " << port << std::endl;
+    // send notification
+    std::string notice = ":server NOTICE " + client->getNickname() + 
+                        " :DCC file transfer accepted for '" + filename + "'\r\n";
+    server.sendMessage(client->getFd(), notice);
+}
+
+bool isDccMessage(const std::string& message)
+{
+    return (message.length() >= 2 && message[0] == '\001' && message[message.length() - 1] == '\001');
+}
+
+void CommandParser::handlePrivmsg(const IRCMessage& msg, Client* client, ServerSocket& server, Bot& bot)
+{
+    if (!client->getIsAuthenticated() || client->getNickname().empty())
+    {
+        server.sendMessage(client->getFd(), ":server 451 * :You have not registered\r\n");
+        return;
+    }
+    if (msg.params.empty() || msg.trailing.empty())
+    {
+        server.sendMessage(client->getFd(), ":server 411 " + client->getNickname() + 
+        " :No recipient given\r\n");
+        return;
+    }
+    std::string target = msg.params[0];
+    std::string message = msg.trailing;
+    // handle channel messages
+    if (target[0] == '#' || target[0] == '&')
+    {
+        Channel* channel = server.getChannelManager().getChannel(target);
+        if (!channel)
+        {
+            server.sendMessage(client->getFd(), ":server 403 " + client->getNickname() + 
+            " " + target + " :No such channel\r\n");
+            return;
+        }
+        
+        if (!channel->isMember(client->getFd()))
+        {
+            server.sendMessage(client->getFd(), ":server 404 " + client->getNickname() + 
+            " " + target + " :Cannot send to channel\r\n");
+            return;
+        }
+        
+        std::string broadcastMsg = ":" + client->getNickname() + "!" + client->getUsername() + 
+        "@localhost PRIVMSG " + target + " :" + message + "\r\n";
+        broadcastToChannel(target, broadcastMsg, server, client->getFd());
+        return;
+    }
+    // handle Bot messages
+     if(target == bot.getNickname())
+    {
+
+        if (msg.trailing == "HELLO")
+        {
+            std::string response = ":server PRIVMSG " + client->getNickname() + " :Hello, I am " + bot.getNickname() + ". How can I assist you?\r\n";
+            server.sendMessage(client->getFd(), response);
+        }
+        else if (msg.trailing == "HELP")
+        {
+            std::string helpMessage = ":server PRIVMSG " + client->getNickname() + " :Available commands: NICK, USER, PRIVMSG, NOTICE, DCC SEND\r\n";
+            server.sendMessage(client->getFd(), helpMessage);
+        }
+        else if (msg.trailing == "VERSION")
+        {
+            std::string versionMessage = ":server PRIVMSG " + client->getNickname() + " :IRC Bot Version 1.3\r\n";
+            server.sendMessage(client->getFd(), versionMessage);
+        }
+ 
+        else if (msg.trailing == "GAME rock" || msg.trailing == "GAME paper" || msg.trailing == "GAME scissors")
+        {
+            std::string welcomemsg = ":server PRIVMSG " + client->getNickname() + " :Welcome to Rock-Paper-Scissors! Type 'GAME rock', 'GAME paper', or 'GAME scissors' to play.\r\n";
+            server.sendMessage(client->getFd(), welcomemsg);
+            bot.handleGame(msg, client, server);
+        }
+        else if (msg.trailing == "QUIT")
+        {
+            std::string quitMessage = ":server PRIVMSG " + client->getNickname() + " :Goodbye!\r\n";
+            server.sendMessage(client->getFd(), quitMessage);
+        }
+        return;
+    }
+    // find target client
+    Client* targetClient = server.getClientManager().getClientByNickname(target);
+    if (!targetClient)
+    {
+        server.sendMessage(client->getFd(), ":server 401 " + client->getNickname() + 
+        " " + target + " :No such nick\r\n");
+        return;
+    }
+    // handle DCC messages
+    if (isDccMessage(message))
+    {
+        std::cout << "[DCC] Detected DCC message: " << message << std::endl;        
+        if (message.find("DCC SEND") != std::string::npos)
+        {
+            handleDccSend(targetClient, target, message, client, server);
+            return;
+        }
+        // forward other CTCP messages
+        std::string ctcpMsg = ":" + client->getNickname() + "!" + client->getUsername() + 
+                             "@localhost PRIVMSG " + target + " :" + message + "\r\n";
+        server.sendMessage(targetClient->getFd(), ctcpMsg);
+        return;
+    }
+    // regular private message
+    std::string privateMsg = ":" + client->getNickname() + "!" + client->getUsername() + 
+    "@localhost PRIVMSG " + target + " :" + message + "\r\n";
+    server.sendMessage(targetClient->getFd(), privateMsg);
 }
 
 void CommandParser::parseCommand(const std::string& msg, Client* client, ServerSocket& server, int epoll_fd, Bot& bot)
@@ -28,7 +184,7 @@ void CommandParser::parseCommand(const std::string& msg, Client* client, ServerS
     {
         handleUser(msg, client, server);
     }
-     else if (msg.find("CAP") == 0)
+    else if (msg.find("CAP") == 0)
     {
         return;
     }
@@ -36,11 +192,11 @@ void CommandParser::parseCommand(const std::string& msg, Client* client, ServerS
     {
         handlePing(msg, client, server);
     }
-    else if (msg.find("WHO") == 0)
+    else if (msg.find("DCC ") == 0)
     {
-        return;
+        handleDccAccept(msg, client, server);
     }
-    else if (msg.find("WHOIS") == 0)
+    else if (msg.find("WHO") == 0 || msg.find("WHOIS") == 0)
     {
         return;
     }
@@ -88,10 +244,6 @@ void CommandParser::parseCommand(const std::string& msg, Client* client, ServerS
         else if (ircMsg.command == "MODE")
         {
             handleMode(ircMsg, client, server);
-        }
-        else if (ircMsg.command == "TOPIC")
-        {
-            handleTopic(ircMsg, client, server);
         }
         else
         {
@@ -252,139 +404,7 @@ void CommandParser::handleUser(const std::string& msg, Client* client, ServerSoc
     }
 }
 
- // handle Dcc msg;
- 
-void CommandParser::handleDccSend(Client* Client2, std::string target ,const std::string& msg, Client* client, ServerSocket& server)
-{
-    // command is : "\x01DCC SEND <filename> <size> <port>\x01"
-    (void) server;
-    std::cout <<"iam herr\n";
-    std::string dccmsg = ":" + client->getUsername() + "!" + client->getNickname() + "@localhost PRIVMSG " + target + " :\001" + msg + "\001\r\n";
-    send(Client2->getFd(), dccmsg.c_str(), dccmsg.length(), 0);
-    // std::istringstream len(msg);
-    // std::string skip, command;
-    // len >> skip >> command;
-    // if (command == "SEND")
-    // {
-    //     std::string filename;
-    //     len >> filename;
-    //     std::string notice = ":localhost NOTICE " + target + " :DCC SEND request for file '" + filename + "' received.\r\n";
-    //     server.sendMessage(client->getFd(), notice);
-    // }
-}
-
-bool isdccessage(const std::string& message)
-{
-    return (message.length() >= 2 && message[0] == '\x01' && message[message.length() - 1] == '\x01');
-}
-
-// PRIVMSG implementation
-void CommandParser::handlePrivmsg(const IRCMessage& msg, Client* client, ServerSocket& server, Bot& bot)
-{
-    if (!client->getIsAuthenticated() || client->getNickname().empty())
-    {
-        server.sendMessage(client->getFd(), ":server 451 * :You have not registered\r\n");
-        return;
-    }
-    if (msg.params.empty() || msg.trailing.empty())
-    {
-        server.sendMessage(client->getFd(), ":server 411 " + client->getNickname() + 
-        " :No recipient given\r\n");
-        return;
-    }
-    
-    std::string target = msg.params[0];
-    std::string message = msg.trailing;
-    // Check if target is a channel
-    if (target[0] == '#' || target[0] == '&')
-    {
-        Channel* channel = server.getChannelManager().getChannel(target);
-        if (!channel)
-        {
-            server.sendMessage(client->getFd(), ":server 403 " + client->getNickname() + 
-            " " + target + " :No such channel\r\n");
-            return;
-        }
-        
-        if (!channel->isMember(client->getFd()))
-        {
-            server.sendMessage(client->getFd(), ":server 404 " + client->getNickname() + 
-            " " + target + " :Cannot send to channel\r\n");
-            return;
-        }
-        
-        // Broadcast to channel members
-        std::string broadcastMsg = ":" + client->getNickname() + "!" + client->getUsername() + 
-        "@localhost PRIVMSG " + target + " :" + message + "\r\n";
-        broadcastToChannel(target, broadcastMsg, server, client->getFd());
-    }
-    
-    //Handle the irc Bot
-    else if(target == bot.getNickname())
-    {
-        if (msg.trailing == "HELLO")
-        {
-            std::string response = ":server PRIVMSG " + client->getNickname() + " :Hello, I am " + bot.getNickname() + ". How can I assist you?\r\n";
-            server.sendMessage(client->getFd(), response);
-        }
-        else if (msg.trailing == "HELP")
-        {
-            std::string helpMessage = ":server PRIVMSG " + client->getNickname() + " :Available commands: NICK, USER, PRIVMSG, NOTICE, DCC SEND\r\n";
-            server.sendMessage(client->getFd(), helpMessage);
-        }
-        else if (msg.trailing == "VERSION")
-        {
-            std::string versionMessage = ":server PRIVMSG " + client->getNickname() + " :IRC Bot Version 1.3\r\n";
-            server.sendMessage(client->getFd(), versionMessage);
-        }
-        else if (msg.trailing == "PING")
-        {
-            std::string pingMessage = ":server PONG " + client->getNickname() + "\r\n";
-            server.sendMessage(client->getFd(), pingMessage);
-        }
-        else if (msg.trailing == "QUIT")
-        {
-            std::string quitMessage = ":server PRIVMSG " + client->getNickname() + " :Goodbye!\r\n";
-            server.sendMessage(client->getFd(), quitMessage);
-        }
-        return;
-    }
-    Client* client2 = server.getClientManager().getClientByNickname(msg.params[1]);
-    std::cout << msg.trailing;
-    if (isdccessage(msg.trailing))
-    {
-        handleDccSend(client2, target,msg.trailing, client, server);
-        return;
-    }
-    
-    else
-    {
-        // Private message to user
-        Client* targetClient = NULL;
-        std::map<int, Client*>& clients = server.getClients();
-        for (std::map<int, Client*>::iterator it = clients.begin(); it != clients.end(); ++it)
-        {
-            if (it->second->getNickname() == target)
-            {
-                targetClient = it->second;
-                break;
-            }
-        }
-        
-        if (!targetClient)
-        {
-            server.sendMessage(client->getFd(), ":server 401 " + client->getNickname() + 
-            " " + target + " :No such nick\r\n");
-            return;
-        }
-        
-        std::string privateMsg = ":" + client->getNickname() + "!" + client->getUsername() + 
-        "@localhost PRIVMSG " + target + " :" + message + "\r\n";
-        server.sendMessage(targetClient->getFd(), privateMsg);
-    }
-}
-
-//Mode change channel modes
+//Mode change channel modes 
 void CommandParser::handleMode(const IRCMessage& msg, Client* client, ServerSocket& server)
 {
     if (!client->getIsAuthenticated() || client->getNickname().empty())
