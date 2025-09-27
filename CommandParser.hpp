@@ -12,7 +12,7 @@ class CommandParser
 public:
     static void parseCommand(const std::string& msg, Client* client, ServerSocket& server, int epoll_fd, Bot& bot);
 private:
-    static void handlePass(const std::string& msg, Client* client, ServerSocket& server, int epoll_fd);
+    static void handlePass(const std::string& msg, Client* client, ServerSocket& server);
     static void handleNick(const std::string& msg, Client* client, ServerSocket& server);
     static void handleUser(const std::string& msg, Client* client, ServerSocket& server);
     static void sendWelcome(Client* client, ServerSocket& server);
@@ -32,7 +32,6 @@ private:
 
     // DCC/CTCP commands enhanced for irssi compatibility
     static void handleDccSend(Client* targetClient, std::string target, const std::string& msg, Client* client, ServerSocket& server);
-    static void handleDccAccept(const std::string& msg, Client* client, ServerSocket& server);
 
     // Helper functions
     static bool isValidChannelName(const std::string& name);

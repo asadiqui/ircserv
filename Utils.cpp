@@ -36,8 +36,6 @@ bool Utils::isValidNickname(const std::string& nick)
 
 bool Utils::isValidUsername(const std::string& username)
 {
-    if (username.empty() || username.length() > 10)
-        return false;
     for (size_t i = 0; i < username.length(); ++i) 
     {
         char c = username[i];

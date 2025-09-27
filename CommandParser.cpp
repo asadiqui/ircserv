@@ -47,23 +47,6 @@ void CommandParser::handleDccSend(Client* targetClient, std::string target, cons
     server.sendMessage(client->getFd(), confirm);
 }
 
-void CommandParser::handleDccAccept(const std::string& msg, Client* client, ServerSocket& server)
-{
-    std::istringstream iss(msg);
-    std::string dcc, accept, filename, port;
-    iss >> dcc >> accept >> filename >> port;
-    
-    if (dcc != "DCC" || accept != "ACCEPT") 
-    {
-        return;
-    }
-    std::cout << "[DCC] ACCEPT received - File: " << filename << ", Port: " << port << std::endl;
-    // send notification
-    std::string notice = ":server NOTICE " + client->getNickname() + 
-                        " :DCC file transfer accepted for '" + filename + "'\r\n";
-    server.sendMessage(client->getFd(), notice);
-}
-
 bool isDccMessage(const std::string& message)
 {
     return (message.length() >= 2 && message[0] == '\001' && message[message.length() - 1] == '\001');
@@ -84,7 +67,7 @@ void CommandParser::handlePrivmsg(const IRCMessage& msg, Client* client, ServerS
     }
     std::string target = msg.params[0];
     std::string message = msg.trailing;
-    // handle channel messages
+    // Handle channel messages
     if (target[0] == '#' || target[0] == '&')
     {
         Channel* channel = server.getChannelManager().getChannel(target);
@@ -174,7 +157,7 @@ void CommandParser::parseCommand(const std::string& msg, Client* client, ServerS
     // Handle legacy format for authentication commands
     if (msg.find("PASS ") == 0)
     {
-        handlePass(msg, client, server, epoll_fd);
+        handlePass(msg, client, server);
     }
     else if (msg.find("NICK ") == 0)
     {
@@ -192,10 +175,7 @@ void CommandParser::parseCommand(const std::string& msg, Client* client, ServerS
     {
         handlePing(msg, client, server);
     }
-    else if (msg.find("DCC ") == 0)
-    {
-        handleDccAccept(msg, client, server);
-    }
+
     else if (msg.find("WHO") == 0 || msg.find("WHOIS") == 0)
     {
         return;
@@ -267,7 +247,7 @@ void CommandParser::sendWelcome(Client* client, ServerSocket& server)
     server.sendMessage(client->getFd(), ":server 004 " + nickname + " server 1.0 io k\r\n");
 }
 
-void CommandParser::handlePass(const std::string& msg, Client* client, ServerSocket& server, int epoll_fd)
+void CommandParser::handlePass(const std::string& msg, Client* client, ServerSocket& server)
 {
     std::string pass = Utils::trim(msg.substr(5));
     int fd = client->getFd();
@@ -294,9 +274,6 @@ void CommandParser::handlePass(const std::string& msg, Client* client, ServerSoc
     else
     {
         server.sendMessage(fd, ":server 464 " + nickname + " :Password incorrect\r\n");
-        server.getClients().erase(fd);
-        close(fd);
-        epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, NULL);
     }
 }
 
@@ -327,9 +304,11 @@ void CommandParser::handleNick(const std::string& msg, Client* client, ServerSoc
     std::map<int, Client*>::const_iterator it;
     for (it = server.getClients().begin(); it != server.getClients().end(); ++it)
     {
-        if (it->second->getNickname() == nick && it->first != client->getFd())
+        if (it->first != client->getFd() && 
+            !it->second->getNickname().empty() && 
+            it->second->getNickname() == nick)
         {
-            server.sendMessage(fd, ":server 433 " + nickname + " :Nickname in use\r\n");
+            server.sendMessage(fd, ":server 433 " + nickname + " " + nick + " :Nickname is already in use\r\n");
             return;
         }
     }
@@ -377,23 +356,20 @@ void CommandParser::handleUser(const std::string& msg, Client* client, ServerSoc
     }
     std::string first_part = params.substr(0, realname_pos);
     std::string realname = params.substr(realname_pos + 2);
+
     std::vector<std::string> tokens = Utils::split(first_part, ' ');
     if (tokens.size() < 3)
     {
         server.sendMessage(fd, ":server 461 " + nickname + " USER :Not enough parameters\r\n");
         return;
     }
+    
     std::string username = Utils::trim(tokens[0]);
     std::string hostname = Utils::trim(tokens[1]); 
     std::string servername = Utils::trim(tokens[2]);
     if (username.empty() || username.length() > 10 || !Utils::isValidUsername(username))
     {
         server.sendMessage(fd, ":server 461 " + nickname + " USER :Invalid username\r\n");
-        return;
-    }
-    if (realname.empty() || realname.length() > 50)
-    {
-        server.sendMessage(fd, ":server 461 " + nickname + " USER :Invalid realname\r\n");
         return;
     }
     client->setUsername(username);
@@ -404,7 +380,7 @@ void CommandParser::handleUser(const std::string& msg, Client* client, ServerSoc
     }
 }
 
-//Mode change channel modes 
+// Mode change channel modes 
 void CommandParser::handleMode(const IRCMessage& msg, Client* client, ServerSocket& server)
 {
     if (!client->getIsAuthenticated() || client->getNickname().empty())
