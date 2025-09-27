@@ -15,36 +15,34 @@ std::string Utils::trim(const std::string& str)
 bool Utils::isValidNickname(const std::string& nick)
 {
     if (nick.empty() || nick.length() > 9)
+        return false; 
+    char first = nick[0];
+    if (!std::isalpha(first) && 
+        first != '[' && first != ']' && first != '{' && first != '}' &&
+        first != '\\' && first != '|' && first != '^' && first != '`' && first != '_')
         return false;
-    for (size_t i = 0; i < nick.length(); ++i)
+    
+    for (size_t i = 1; i < nick.length(); ++i) 
     {
         char c = nick[i];
-        if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
-              (c >= '0' && c <= '9') || c == '-' || c == '_' ||
-              c == '{' || c == '}' || c == '|' || c == '\\' || c == '^' ||
-              c == '[' || c == ']')) 
-        {
+        if (!std::isalnum(c) && c != '-' &&
+            c != '[' && c != ']' && c != '{' && c != '}' &&
+            c != '\\' && c != '|' && c != '^' && c != '`' && c != '_')
             return false;
-        }
     }
     return true;
 }
+
 
 bool Utils::isValidUsername(const std::string& username)
 {
     if (username.empty() || username.length() > 10)
         return false;
-    if (!(username[0] >= 'A' && username[0] <= 'Z') && 
-        !(username[0] >= 'a' && username[0] <= 'z'))
-        return false;
-    for (size_t i = 0; i < username.length(); ++i)
+    for (size_t i = 0; i < username.length(); ++i) 
     {
         char c = username[i];
-        if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
-              (c >= '0' && c <= '9') || c == '-' || c == '_'))
-        {
+        if (c == ' ' || c == '!' || c == ':' || c == '#' || c == '@') 
             return false;
-        }
     }
     return true;
 }
