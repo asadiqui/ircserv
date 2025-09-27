@@ -175,7 +175,6 @@ void CommandParser::parseCommand(const std::string& msg, Client* client, ServerS
     {
         handlePing(msg, client, server);
     }
-
     else if (msg.find("WHO") == 0 || msg.find("WHOIS") == 0)
     {
         return;
@@ -281,6 +280,7 @@ void CommandParser::handleNick(const std::string& msg, Client* client, ServerSoc
 {
     std::string nick = Utils::trim(msg.substr(5));
     int fd = client->getFd();
+    std::string oldNickname = client->getNickname();
     std::string nickname;
 
     if (client->getNickname().empty())
@@ -313,9 +313,9 @@ void CommandParser::handleNick(const std::string& msg, Client* client, ServerSoc
         }
     }
     client->setNickname(nick);
-    if (!client->getUsername().empty())
-    {
-        sendWelcome(client, server);
+    if (!client->getUsername().empty() && oldNickname.empty()) 
+    { 
+        sendWelcome(client, server); 
     }
 }
 
